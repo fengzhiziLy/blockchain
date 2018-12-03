@@ -5,6 +5,9 @@ const rsa = require('./rsa')
 const blockchain = new Blockchain()
 
 function formatLog (data) {
+  if (!data || data.length === 0) {
+    return
+  }
   if (!Array.isArray(data)) {
     data = [data]
   }
@@ -43,7 +46,7 @@ vorpal
     }
     callback()
   })
-  
+
 vorpal
   .command('detail <index>', '查看区块详情')
   .action(function (args, callback) {
@@ -63,7 +66,7 @@ vorpal
   })
 
 vorpal
-  .command('chain', '查看区块链')
+  .command('blockchain', '查看区块链')
   .action(function (args, callback) {
     formatLog(blockchain.blockchain)
     callback()
@@ -73,6 +76,23 @@ vorpal
   .command('pub', '查看本地地址')
   .action(function (args, callback) {
     console.log(rsa.keys.pub)
+    callback()
+  })
+
+vorpal
+  .command('peers', '查看网络节点列表')
+  .action(function (args, callback) {
+    formatLog(blockchain.peers)
+    callback()
+  })
+
+vorpal
+  .command('chat <msg>', '跟别的节点hi一下')
+  .action(function (args, callback) {
+    blockchain.boardcast({
+      type: 'hi',
+      data: args.msg
+    })
     callback()
   })
 // vorpal
