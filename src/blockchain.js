@@ -126,8 +126,21 @@ class Blockchain {
           data: remote
         })
         // 4. 告诉你现在区块链的数据
+        this.send({
+          type: 'blockchain',
+          data: JSON.stringify({
+            blockchain: this.blockchain,
+            // trans: this.data
+          })
+        }, remote.port, remote.address)
         this.peers.push(remote)
         console.log('你好啊，新朋友', remote)
+        break
+      case 'blockchain':
+        // 同步区块链
+        let allData = JSON.parse(action.data)
+        let newChain = allData.blockchain
+        this.replaceChain(newChain)
         break
       case 'remoteAddress':
         // 存储远程消息  退出的时候用
@@ -293,6 +306,18 @@ class Blockchain {
       return false
     }
     return true
+  }
+  replaceChain (newChain) {
+    // 先不校验交易
+    if (newChain.length === 1) {
+      return
+    }
+    if (this.isValidaChain(newChain) && newChain.length > this.blockchain.length) {
+      // 拷贝一份
+      this.blockchain = JSON.parse(JSON.stringify(newChain))
+    } else {
+      console.log('[错误]: 不合法链')
+    }
   }
 }
 
