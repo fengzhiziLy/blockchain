@@ -26,7 +26,7 @@ function formatLog (data) {
 
 vorpal
   .command('trans <to> <amount>', '转账')
-  .action(function(args, callback) {
+  .action(function (args, callback) {
     // 本地公钥当作转出地址
     let trans = blockchain.transfer(rsa.keys.pub, args.to, args.amount)
     if (trans) {
@@ -40,7 +40,7 @@ vorpal
   .action(function (args, callback) {
     const blance = blockchain.blance(args.address)
     if (blance) {
-      formatLog({blance, address: args.address})
+      formatLog({ blance, address: args.address })
     } else {
 
     }
@@ -95,6 +95,12 @@ vorpal
     })
     callback()
   })
+vorpal
+  .command('pending', '查看还没被打包的交易')
+  .action(function (args, callback) {
+    formatLog(blockchain.data)
+    callback()
+  })
 // vorpal
 //   .command('hello', '你好啊')
 //   .action(function (args, callback) {
@@ -106,5 +112,5 @@ console.log('welcome to feng-chain')
 vorpal.exec('help')
 
 vorpal
-  .delimiter("feng-chain => ")
+  .delimiter('feng-chain => ')
   .show()

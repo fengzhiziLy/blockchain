@@ -5,7 +5,6 @@
 // 挖矿
 // p2p网络
 
-
 // [
 //   {
 //     index: 0, 索引
@@ -24,7 +23,6 @@
 //     nonce: 随机数
 //   }
 // ]
-
 
 const crypto = require('crypto')
 const dgram = require('dgram')
@@ -51,7 +49,7 @@ class Blockchain {
     this.peers = []
     this.remote = {}
     // 种子节点
-    this.seed = {port: 8001, address: 'localhost'}
+    this.seed = { port: 8001, address: 'localhost' }
     this.udp = dgram.createSocket('udp4')
     this.init()
     // const hash = this.computeHash(0, '0', 1543573216287, 'hello feng-chain!', 2)
@@ -63,10 +61,10 @@ class Blockchain {
   }
   bindP2p () {
     this.udp.on('message', (data, remote) => {
-      const {address, port} = remote
+      const { address, port } = remote
       const action = JSON.parse(data)
       if (action.type) {
-        this.dispatch(action, {address, port})
+        this.dispatch(action, { address, port })
       }
     })
     this.udp.on('listening', () => {
@@ -94,7 +92,7 @@ class Blockchain {
       this.peers.push(this.seed)
     }
   }
-  send(message, port, address) {
+  send (message, port, address) {
     // console.log('send', message, port, address)
     this.udp.send(JSON.stringify(message), port, address)
   }
@@ -107,7 +105,7 @@ class Blockchain {
   dispatch (action, remote) {
     // 接受的网络消息
     // console.log('接受到P2P网络的消息', action)
-    switch(action.type) {
+    switch (action.type) {
       case 'newpeer':
         // 种子节点要做的事情
         // 1. 你的公网IP和port是什么
@@ -130,7 +128,7 @@ class Blockchain {
           type: 'blockchain',
           data: JSON.stringify({
             blockchain: this.blockchain,
-            // trans: this.data
+            trans: this.data
           })
         }, remote.port, remote.address)
         this.peers.push(remote)
@@ -140,7 +138,9 @@ class Blockchain {
         // 同步区块链
         let allData = JSON.parse(action.data)
         let newChain = allData.blockchain
+        let newTrans = allData.trans
         this.replaceChain(newChain)
+        this.replaceTrans(newTrans)
         break
       case 'remoteAddress':
         // 存储远程消息  退出的时候用
@@ -154,23 +154,61 @@ class Blockchain {
       case 'sayhi':
         let remotePeer = action.data
         this.peers.push(remotePeer)
-        console.log('[信息] 新朋友你好，请你和咖啡')
-        this.send({type: 'hi', data: 'hi'}, remotePeer.port, remotePeer.address)
+        console.log('[信息] 新朋友你好，请你喝咖啡')
+        this.send({ type: 'hi', data: 'hi' }, remotePeer.port, remotePeer.address)
         break
       case 'hi':
         console.log(`${remote.address}: ${remote.port} : ${action.data}`)
+        break
+      case 'trans':
+        // 网络上收到的交易请求
+        // 判断是不是重复交易
+        if (!this.data.find(v => this.isEqualObj(v, action.data))) {
+          console.log('有新的交易，请注意查收')
+          this.addTrans(action.data)
+          this.boardcast({ type: 'trans', data: action.data })
+        }
+        break
+      case 'mine':
+        // 网络上有人挖矿成功
+        const lastBlock = this.getLastBlock()
+        if (lastBlock.hash === action.data.hash) {
+          // 重复的消息
+          return
+        }
+        if (this.isValidBlock(action.data, lastBlock)) {
+          console.log('[信息]： 有朋友挖矿成功 一起给他喝彩！')
+          this.blockchain.push(action.data)
+          // 清空本地消息
+          this.data = []
+          this.boardcast({
+            type: 'mine',
+            data: action.data
+          })
+        } else {
+          console.log('挖矿的区块不合法')
+        }
         break
       default:
         console.log('这个action不认识')
     }
   }
-  isEqualPeer (peer1, peer2) {
-    return peer1.address == peer2.address && peer1.port == peer2.port
+  isEqualObj (obj1, obj2) {
+    const key1 = Object.keys(obj1)
+    const key2 = Object.keys(obj2)
+    if (key1.length !== key2.length) {
+      // key数量不相同
+      return false
+    }
+    return key1.every(key => obj1[key] === obj2[key])
   }
-  addPeers(peers) {
+  // isEqualPeer (peer1, peer2) {
+  //   return peer1.address == peer2.address && peer1.port == peer2.port
+  // }
+  addPeers (peers) {
     peers.forEach(peer => {
       // 新节点如果不存在就添加一个到peers
-      if (!this.peers.find(v => this.isEqualPeer(peer, v))) {
+      if (!this.peers.find(v => this.isEqualObj(peer, v))) {
         this.peers.push(peer)
       }
     })
@@ -180,7 +218,13 @@ class Blockchain {
     return this.blockchain[this.blockchain.length - 1]
   }
 
-  transfer(from, to, amount) {
+  transfer (from, to, amount) {
+    const timestamp = new Date().getTime()
+    // 签名校验
+    const signature = rsa.sign({ from, to, amount, timestamp })
+    // console.log(sig)
+    const sigTrans = { from, to, amount, timestamp, signature }
+
     if (from !== '0') {
       // 交易非挖矿
       const blance = this.blance(from)
@@ -188,11 +232,12 @@ class Blockchain {
         console.log('not enough blance', from, blance, amount)
         return
       }
+      this.boardcast({
+        type: 'trans',
+        data: sigTrans
+      })
     }
-    // 签名校验
-    const sig = rsa.sign({from, to, amount})
-    console.log(sig)
-    const sigTrans = {from, to, amount, sig}
+
     this.data.push(sigTrans)
     return sigTrans
   }
@@ -205,10 +250,10 @@ class Blockchain {
         return
       }
       block.data.forEach(trans => {
-        if (address == trans.from) {
+        if (address === trans.from) {
           blance -= trans.amount
         }
-        if (address == trans.to) {
+        if (address === trans.to) {
           blance += trans.amount
         }
       })
@@ -216,10 +261,20 @@ class Blockchain {
     console.log(blance)
     return blance
   }
-  isValidTransfer(trans) {
+  isValidTransfer (trans) {
     // 是不是合法的转账
     // 地址即是公钥
     return rsa.verity(trans, trans.from)
+  }
+  addTrans (trans) {
+    if (this.isValidTransfer(trans)) {
+      this.data.push(trans)
+    }
+  }
+  replaceTrans (trans) {
+    if (trans.every(v => this.isValidTransfer(v))) {
+      this.data = trans
+    }
   }
   // 挖矿  其实就是打包交易
   mine (address) {
@@ -240,6 +295,11 @@ class Blockchain {
     if (this.isValidBlock(newBlock) && this.isValidaChain()) {
       this.blockchain.push(newBlock)
       this.data = []
+      console.log('[信息] 挖矿成功')
+      this.boardcast({
+        type: 'mine',
+        data: newBlock
+      })
       return newBlock
     } else {
       console.log('Error, Invalid Block', newBlock)
@@ -266,7 +326,7 @@ class Blockchain {
       hash
     }
   }
-  computeHashForBlock({index, prevHash, timestamp, data, nonce}) {
+  computeHashForBlock ({ index, prevHash, timestamp, data, nonce }) {
     return this.computeHash(index, prevHash, timestamp, data, nonce)
   }
   // 计算哈希
@@ -283,7 +343,7 @@ class Blockchain {
     // 5. 新区块的哈希值计算正确
     if (newBlock.index !== lastBlock.index + 1) {
       return false
-    } else  if(newBlock.timestamp <= lastBlock.timestamp) {
+    } else if (newBlock.timestamp <= lastBlock.timestamp) {
       return false
     } else if (newBlock.prevHash !== lastBlock.hash) {
       return false
